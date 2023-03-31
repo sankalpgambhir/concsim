@@ -22,16 +22,41 @@ k.graph.reachableMatrix
 
 k.hasCycle
 
-val y = 6
+val k1 = Relation(1, 2, 3)
+k1.addEdges(1 -> 2, 2 -> 3)
+
+val k2 = k1.withEdges(3 -> 2)
+k2.addEdges(2 -> 1)
 
 import concsim.program._
 
 val x = Variable("x")
-val p = Program(
+val y = Variable("y")
+
+val p1 = Program(
     Seq(
         Seq(Read(x), Write(x, 2), Read(x, 0))
     )
 )
 
-p.valid(SequentialConsistency)
+val p2 = Program(
+    Seq(
+        Seq(Write(x, 1), Read(y, 0), Write(y, 1), Read(x, 1)),
+        Seq(Write(x, 2), Read(y, 0), Write(y, 2), Read(x, 2))
+    )
+)
 
+val p3 = Program(
+    Seq(
+        Seq(Write(x, 1), Read(x, 1)),
+        Seq(Write(x, 2), Read(x, 2))
+    )
+)
+
+SequentialConsistency.hb(p1)
+SequentialConsistency.hb(p2)
+SequentialConsistency.hb(p3)
+
+p1.validUnder(SequentialConsistency)
+p2.validUnder(SequentialConsistency)
+p3.validUnder(SequentialConsistency)

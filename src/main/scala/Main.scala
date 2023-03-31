@@ -13,7 +13,7 @@ import concsim.program._
       )
   )
 
-  p.valid(SequentialConsistency)
+  println(p.validUnder(SequentialConsistency))
 }
 
 def msg = "I was compiled by Scala 3. :)"

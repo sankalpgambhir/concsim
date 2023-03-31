@@ -10,8 +10,6 @@ class Graph[A]
         var edges: Map[A, Set[A]]
     )
 {
-    require(nodes.forall(edges.get(_).isDefined))
-
     def this(nodes: Iterable[A]) = this(nodes, nodes.map((_, Set.empty)).toMap)
 
     def withEdges(newEdges: (A, A)*): Graph[A] = withNodesAndEdges(Iterable.empty, newEdges)
@@ -89,6 +87,8 @@ class Graph[A]
     }
 
     def hasCycle: Boolean = nodes.exists(n => nodes.exists(m => reachable(n, m) && reachable(m, n)))
+
+    def copy: Graph[A] = Graph(nodes, edges)
 
     override def toString(): String =
         // pain

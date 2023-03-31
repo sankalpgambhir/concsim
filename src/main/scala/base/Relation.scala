@@ -12,17 +12,31 @@ class Relation[A]
 
     def this(objects: Set[A]) = this(objects, Graph(objects))
     def this() = this(Set.empty)
+    def this(objects: A*) = this(Set(objects:_*))
+
+    def copy: Relation[A] = Relation(objects, graph.copy)
 
     def addObjects(newObjects: A*): this.type = {
-        for (o <- newObjects) if (!objects.contains(o)) objects += o
+        for (o <- newObjects) objects += o
         this
     }
 
     def addEdges(newEdges: (A, A)*): this.type = {
-        addObjects(newEdges.map(_._1): _*)
+        addObjects(newEdges.flatten{(a, b) => Seq(a, b)} : _*)
         graph.withNodesAndEdges(objects, newEdges)
         this
     }
+
+    /**
+      * Returns a new Relation with these edges added
+      */
+    def withEdges(newEdges: (A, A)*): Relation[A] = {
+        val r = this.copy
+        r.addEdges(newEdges: _*)
+        r
+    }
+
+    def reachable(n: A, m: A): Boolean = objects.contains(n) && objects.contains(m) && graph.reachable(n, m) 
 
     def hasCycle = graph.hasCycle
     def isAcyclic = !hasCycle
