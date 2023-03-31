@@ -3,17 +3,17 @@
 import concsim.base._
 import scala.collection.mutable.Set
 import scala.collection.parallel._
+import concsim.program._
 
 @main def hello: Unit = {
-  val x = Relation[Int](Set(1, 2, 3))
-  x.addEdges((1, 2), (2, 3))
+  val x = Variable("x")
+  val p = Program(
+      Seq(
+          Seq(Read(x), Write(x, 2), Read(x, 0))
+      )
+  )
 
-  val z = Graph(ParSet(1, 2, 3))
-  println(z.toString)
-
-  println(x.toString)
-
-  val y = 6
+  p.valid(SequentialConsistency)
 }
 
 def msg = "I was compiled by Scala 3. :)"

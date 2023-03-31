@@ -20,10 +20,7 @@ class Graph[A]
         val newNodeList = (nodes ++ newNodes)
         val newEdgesGrouped = newEdges.groupBy(_._1).map((k, v) => (k, v.map(_._2)))
         val newEdgeList: Map[A, Set[A]] = newNodeList.map( n => (n,
-            newEdgesGrouped.get(n) match {
-                case None => Set.empty
-                case Some(s) => (edges(n) ++ s.seq.toSet)
-            })
+            edges.getOrElse(n, Set.empty) ++ newEdgesGrouped.getOrElse(n, Iterator.empty))
         ).toMap
 
         nodes = newNodeList
