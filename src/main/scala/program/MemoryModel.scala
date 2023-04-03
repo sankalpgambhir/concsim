@@ -24,10 +24,57 @@ sealed trait MemoryModel {
   }
 
   /**
+    * Dumb rf generation with minimal pruning ((po U rf)+)
+    *
+    * @param p the program
+    * @param worklist the list of currently unassigned reads
+    * @param currentOrder currently accumulated rf order
+    * @param currentHB currently accumulated hb order (assumed (po U rf)+ by default) 
+    * @return
+    */
+  def rfWithWorklist(p: Program)(worklist: Seq[Read], currentOrder: Order = Relation(), currentHB: Order = po(p)): LazyList[Order] = {
+    lazy val rd = worklist.head
+    lazy val possibleRFs: Iterable[Write] =
+      currentHB.objects.collect {
+        case wr: Write
+            if (
+              wr.v == rd.v &&
+              rd.r.isEmpty || rd.r.get == wr.w &&
+              (!currentHB.reachable(rd, wr)) // is this right in general? Since it assumes (po U rf)+ reachability for selecting rewrites
+              // just remove it if it seems wrong, it is technically just pruning; can change to just po reachability by removing currentHB[.withEdges...] below
+            ) =>
+          wr
+      }
+
+    if (worklist.isEmpty) currentOrder #:: LazyList.empty
+    else if (possibleRFs.isEmpty)
+      // invalid branch
+      LazyList.empty
+    else possibleRFs.map(wr => rfWithWorklist(p)(worklist.tail, currentOrder.withEdges(wr -> rd), currentHB.withEdges(wr -> rd))).reduce(_ #::: _)
+  }
+
+  /**
    * Reads-From (rf)
+   *
+   * Currently uses [[rfWithWorklist]] to perform a straightforward search for
+   * generation. The assumption of an order of reads (using `Seq[Read]`) would
+   * make this incomplete. We solve this by... checking all permutations. Since
+   * it is evaluated lazily, it is not so bad if there is actually an error. It
+   * is pretty bad if you actually have `Invalid` behaviour though.
+   *
+   * Can be improved quite a lot by implementing better rf-equivalence checking
+   * and equivalence-driven generation for Mazurkiewicz traces.
+   *
+   * e.g. overkill: Optimal Stateless Model Checking for Reads-From Equivalence under
+   * Sequential Consistency [[https://dl.acm.org/doi/pdf/10.1145/3360576]]
+   *
    * @return stream of possible `rf` orders
    */
-  def rf(p: Program): LazyList[Order]
+  def rf(p: Program): LazyList[Order] = {
+    val reads = p.events.reduce(_ ++ _).collect { case r: Read => r }
+
+    reads.permutations.map(rfWithWorklist(p)(_)).reduce(_ #::: _)
+  }
 
   /**
    * Happens-Before (hb)
@@ -48,6 +95,11 @@ sealed trait MemoryModel {
 
 case object SequentialConsistency extends MemoryModel {
 
+  /**
+    * Internal function to obtain rf (with partial mo) with some pruning.
+    * Modified version of [[rfWithWorklist]]. See [[rf]] and [[rfWithWorklist]]
+    * for details.
+    */
   def moRfWithWorklist(p: Program)(worklist: Seq[Read], currentOrder: Order = Relation(), currentHB: Order = po(p)): LazyList[Order] = {
     lazy val rd = worklist.head
     lazy val possibleRFsByOrder: Iterable[Write] =
