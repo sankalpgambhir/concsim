@@ -2,8 +2,6 @@ package concsim.program
 
 import concsim.base.Relation
 
-import collection.parallel.CollectionConverters.IterableIsParallelizable
-
 type Order = Relation[Instruction]
 
 sealed trait MemoryModel {
@@ -50,14 +48,13 @@ sealed trait MemoryModel {
 
 case object SequentialConsistency extends MemoryModel {
 
-  def rfWithWorklist(p: Program)(worklist: Seq[Read], currentOrder: Order = Relation(), currentHB: Order = po(p)): LazyList[Order] = {
+  def moRfWithWorklist(p: Program)(worklist: Seq[Read], currentOrder: Order = Relation(), currentHB: Order = po(p)): LazyList[Order] = {
     lazy val rd = worklist.head
-    lazy val possibleRFs: Seq[Write] =
+    lazy val possibleRFsByOrder: Iterable[Write] =
       currentHB.objects.collect {
         case wr: Write
             if (
               wr.v == rd.v &&
-                (rd.r.isEmpty || rd.r.get == wr.w) &&
                 (!currentHB.reachable(rd, wr)) &&
                 !currentHB.objects.exists {
                   case wr2: Write => wr.v == wr2.v && currentHB.reachable(wr, wr2) && currentHB.reachable(wr2, rd)
@@ -65,26 +62,36 @@ case object SequentialConsistency extends MemoryModel {
                 }
             ) =>
           wr
-      }.toSeq
+      }
+    lazy val possibleRFs = possibleRFsByOrder.filter(rd.r.isEmpty || rd.r.get == _.w)
+    def newEdges(wr: Instruction): Seq[(Instruction, Instruction)] = Seq((wr -> rd)) ++ possibleRFsByOrder.filterNot(_ == wr).map(_ -> wr)
 
     if (worklist.isEmpty) currentOrder #:: LazyList.empty
     else if (possibleRFs.isEmpty)
       // invalid branch
       LazyList.empty
-    else possibleRFs.map(wr => rfWithWorklist(p)(worklist.tail, currentOrder.withEdges((wr, rd)), currentHB.withEdges((wr, rd)))).reduce(_ #::: _)
+    else possibleRFs.map(wr => moRfWithWorklist(p)(worklist.tail, currentOrder.withEdges(newEdges(wr): _*), currentHB.withEdges(newEdges(wr): _*))).reduce(_ #::: _)
   }
 
   /**
-   * Performs a stupid search to assign an rf order to the program
-   * TODO: Not complete because it assigns an order to the reads
+   * Performs a (not so) stupid search to assign an rf order to the program.
+   * Also optimized to insert a partial mo into the rf order. 
+   *
+   * Really stupidly checks all possible permutations to find errors. If your
+   * behaviour is really invalid, this is quite annoying.
+   *
+   * With the mo-optimization instead of a separate complete computation, I'm
+   * also not sure if it is complete modulo order of reads. But I think it
+   * produces a partial-mo that is "total" for this RF, i.e. any total extension
+   * of it should not affect cyclicity. I do not currently have a proof of this.
    *
    * @param p the program
-   * @return
+   * @return an rf order (U mo)
    */
   override def rf(p: Program): LazyList[Order] = {
     val reads = p.events.reduce(_ ++ _).collect { case r: Read => r }
 
-    rfWithWorklist(p)(reads)
+    reads.permutations.map(moRfWithWorklist(p)(_)).reduce(_ #::: _)
   }
 
   override def hb(p: Program): LazyList[Order] = rf(p).map(po(p) U _)
