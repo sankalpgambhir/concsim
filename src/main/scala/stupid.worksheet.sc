@@ -1,6 +1,5 @@
 import concsim.program.Program
 
-
 import concsim.base._
 import scala.collection.mutable.Set
 import scala.collection.parallel._
@@ -24,6 +23,7 @@ k.hasCycle
 
 val k1 = Relation(1, 2, 3)
 k1.addEdges(1 -> 2, 2 -> 3)
+k1.linearized
 
 val k2 = k1.withEdges(3 -> 2)
 k2.addEdges(2 -> 1)
@@ -42,13 +42,13 @@ val p1 = Program(
 val p2 = Program(
     Seq(
         Seq(Write(x, 1), Read(y, 0), Write(y, 1), Read(x, 1)),
-        Seq(Write(x, 2), Read(y, 0), Write(y, 2), Read(x, 2))
+        Seq(Write(x, 2), Read(y, 0), Write(y, 0), Read(x))
     )
 )
 
 val p3 = Program(
     Seq(
-        Seq(Write(x, 1), Read(x, 1)),
+        Seq(Write(x, 1), Read(x, 2)),
         Seq(Write(x, 2), Read(x, 2))
     )
 )

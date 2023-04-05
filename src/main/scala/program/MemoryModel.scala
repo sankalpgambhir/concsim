@@ -1,13 +1,53 @@
 package concsim.program
 
+import scala.collection.mutable.{Map as MMap}
 import concsim.base.Relation
+import escritoire.{Tabulation, Heading}
 
 type Order = Relation[Instruction]
 
 sealed trait MemoryModel {
 
   sealed trait ProgramJudgement
-  case class Valid(witness: Option[Order]) extends ProgramJudgement
+  case class Valid(witness: Order, program: Program) extends ProgramJudgement {
+    // this currently has a strong linearization requirement
+    // and infers read values using the topo sort provided
+    // rushing this to have an SC system working
+    // TODO: make this generic
+    override def toString(): String = {
+      val linearizedWithoutVals = witness.linearized
+
+      val linearizedWithInits = {
+        var lin = Seq[(Instruction, Instruction)]()
+        val vals = MMap(program.variables.map(_ -> 0).toSeq: _*)
+
+        for (i <- linearizedWithoutVals)
+          i match {
+            case rd: Read => lin = lin :+ (i, Read(rd.v, rd.r.getOrElse(vals(rd.v))))
+            case rm: RMW => {
+              val curr = vals(rm.v)
+              vals(rm.v) = rm.w
+              lin = lin :+ (i, RMW(rm.v, Some(rm.r.getOrElse(curr)), rm.w))
+            }
+            case wr: Write => vals(wr.v) = wr.w; lin = lin :+ (i, i)
+          }
+
+        lin
+      }
+
+      val linearized = linearizedWithInits.drop(program.variables.size)
+
+      val t = Tabulation(
+        program.events.zipWithIndex.map((t, i) => 
+          Heading(s"th$i", getter = ((r: (Instruction, Instruction)) => if (t.exists(_ == r._1)) then r._2.toString() else ""))
+        ): _*
+      ).tabulate(1000, linearized)
+
+      val trace = t.reduce(_ ++ "\n" ++ _)
+      s"Trace found\n$trace"
+    }
+
+  }
   case object Invalid extends ProgramJudgement
 
   /**
@@ -32,18 +72,19 @@ sealed trait MemoryModel {
     * @param currentHB currently accumulated hb order (assumed (po U rf)+ by default) 
     * @return
     */
-  def rfWithWorklist(p: Program)(worklist: Seq[Read], currentOrder: Order = Relation(), currentHB: Order = po(p)): LazyList[Order] = {
+  def rfWithWorklist(p: Program)(worklist: Seq[Instruction & ReadInstruction], currentOrder: Order = Relation(), currentHB: Order = po(p)): LazyList[Order] = {
     lazy val rd = worklist.head
-    lazy val possibleRFs: Iterable[Write] =
-      currentHB.objects.collect {
-        case wr: Write
-            if (
-              wr.v == rd.v &&
-              rd.r.isEmpty || rd.r.get == wr.w &&
-              (!currentHB.reachable(rd, wr)) // is this right in general? Since it assumes (po U rf)+ reachability for selecting rewrites
-              // just remove it if it seems wrong, it is technically just pruning; can change to just po reachability by removing currentHB[.withEdges...] below
-            ) =>
-          wr
+    lazy val possibleRFs: Iterable[Instruction & WriteInstruction] =
+      currentHB.objects.collect { i =>
+        i match {
+          case wr: WriteInstruction
+              if (
+                wr.v == rd.v &&
+                rd.r.isEmpty || rd.r.get == wr.w &&
+                (!currentHB.reachable(rd, wr)) // is this right in general? Since it assumes (po U rf)+ reachability for selecting rewrites
+                // just remove it if it seems wrong, it is technically just pruning; can change to just po reachability by removing currentHB[.withEdges...] below
+              ) => wr
+        }
       }
 
     if (worklist.isEmpty) currentOrder #:: LazyList.empty
@@ -71,7 +112,7 @@ sealed trait MemoryModel {
    * @return stream of possible `rf` orders
    */
   def rf(p: Program): LazyList[Order] = {
-    val reads = p.events.reduce(_ ++ _).collect { case r: Read => r }
+    val reads = p.events.reduce(_ ++ _).collect { i => i match { case r: ReadInstruction => r } }
 
     reads.permutations.map(rfWithWorklist(p)(_)).reduce(_ #::: _)
   }
@@ -90,7 +131,7 @@ sealed trait MemoryModel {
       case _ =>
         ord.find(_.isAcyclic) match
           case None => Invalid
-          case Some(witness) => Valid(Some(witness))
+          case Some(witness) => Valid(witness, p)
 }
 
 case object SequentialConsistency extends MemoryModel {
@@ -100,11 +141,11 @@ case object SequentialConsistency extends MemoryModel {
     * Modified version of [[rfWithWorklist]]. See [[rf]] and [[rfWithWorklist]]
     * for details.
     */
-  def moRfWithWorklist(p: Program)(worklist: Seq[Read], currentOrder: Order = Relation(), currentHB: Order = po(p)): LazyList[Order] = {
+  def moRfWithWorklist(p: Program)(worklist: Seq[Instruction & ReadInstruction], currentOrder: Order = Relation(), currentHB: Order = po(p)): LazyList[Order] = {
     lazy val rd = worklist.head
-    lazy val possibleRFsByOrder: Iterable[Write] =
+    lazy val possibleRFsByOrder: Iterable[Instruction & WriteInstruction] =
       currentHB.objects.collect {
-        case wr: Write
+        case wr: (WriteInstruction & Instruction)
             if (
               wr.v == rd.v &&
                 (!currentHB.reachable(rd, wr)) &&
@@ -141,7 +182,7 @@ case object SequentialConsistency extends MemoryModel {
    * @return an rf order (U mo)
    */
   override def rf(p: Program): LazyList[Order] = {
-    val reads = p.events.reduce(_ ++ _).collect { case r: Read => r }
+    val reads = p.events.reduce(_ ++ _).collect { case r: ReadInstruction => r }
 
     reads.permutations.map(moRfWithWorklist(p)(_)).reduce(_ #::: _)
   }

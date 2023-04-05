@@ -40,6 +40,7 @@ class Relation[A](
 
   def hasCycle = graph.hasCycle
   def isAcyclic = !hasCycle
+  def linearized = graph.topologicalSort
 
   def union(other: Relation[A]): Relation[A] = Relation(objects ++ other.objects, graph.merge(other.graph))
   def transitiveClosure: Relation[A] = Relation(objects, graph.transitiveClosure)

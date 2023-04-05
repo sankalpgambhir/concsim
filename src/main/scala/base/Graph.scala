@@ -86,6 +86,33 @@ class Graph[A](
 
   def hasCycle: Boolean = nodes.exists(n => nodes.exists(m => reachable(n, m) && reachable(m, n)))
 
+  def topologicalSort: Seq[A] = {
+    require(!hasCycle)
+
+    val permaMark = MMap(nodes.map(_ -> false).toSeq: _*)
+    val tempMark = MMap(nodes.map(_ -> false).toSeq : _*)
+
+    var sorted = Seq[A]()
+
+    // sort n and its children
+    def sort_(n: A): Unit = 
+      if (!permaMark(n)) {
+        if (!tempMark(n)) {
+          tempMark(n) = true
+
+          edges.getOrElse(n, Set()).foreach(sort_(_))
+
+          tempMark(n) = false
+          permaMark(n) = true
+          sorted = n +: sorted
+        }
+      }
+
+    nodes.foreach(sort_(_))
+
+    sorted
+  }
+
   def copy: Graph[A] = Graph(nodes, edges)
 
   override def toString(): String =

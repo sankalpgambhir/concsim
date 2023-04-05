@@ -28,6 +28,8 @@ lazy val root = project
     scalaVersion := scala3Version,
 
     libraryDependencies += "org.scalameta" %% "munit" % "0.7.29" % Test,
+
+    libraryDependencies += ("com.propensive" %% "escritoire-core" % "0.3.0").cross(CrossVersion.for3Use2_13),
     
     libraryDependencies += "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4",
   )
