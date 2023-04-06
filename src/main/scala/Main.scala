@@ -1,10 +1,9 @@
-
 import concsim.base._
 import concsim.program._
 
+import java.util.concurrent.locks.ReadWriteLock
 import scala.collection.mutable.Set
 import scala.collection.parallel._
-import java.util.concurrent.locks.ReadWriteLock
 
 @main def main: Unit = {
   val x = Variable("x")
@@ -12,11 +11,11 @@ import java.util.concurrent.locks.ReadWriteLock
 
   // simple ordering test
   val p = Program(
-      Seq(
-          Seq(Write(x, 3)),
-          Seq(Write(x, 1), ReadWrite(x, 3, 4)),
-          Seq(Write(x, 2), Read(x, 3))
-      )
+    Seq(
+      Seq(Write(x, 3)),
+      Seq(Write(x, 1), ReadWrite(x, 3, 4)),
+      Seq(Write(x, 2), Read(x, 3))
+    )
   )
   println(p)
   println(p.validUnder(SequentialConsistency))
@@ -30,7 +29,7 @@ import java.util.concurrent.locks.ReadWriteLock
   val pLocal = Program(
     Seq(
       Seq(Lock(l), ReadWrite(x, None, r1, None), ReadWrite(r1, None, x, None, _ + 1), Unlock(l), Read(x, 2)),
-      Seq(Lock(l), ReadWrite(x, None, r2, None), ReadWrite(r2, None, x, None, _ + 1), Unlock(l), Read(x, 1)),
+      Seq(Lock(l), ReadWrite(x, None, r2, None), ReadWrite(r2, None, x, None, _ + 1), Unlock(l), Read(x, 1))
     )
   )
 
@@ -42,7 +41,7 @@ import java.util.concurrent.locks.ReadWriteLock
   val pLocalError = Program(
     Seq(
       Seq(Lock(l), ReadWrite(x, None, r1, None), ReadWrite(r1, None, x, None, _ + 1), Unlock(l), Read(x, 1)),
-      Seq(Lock(l), ReadWrite(x, None, r2, None), ReadWrite(r2, None, x, None, _ + 1), Unlock(l), Read(x, 1)),
+      Seq(Lock(l), ReadWrite(x, None, r2, None), ReadWrite(r2, None, x, None, _ + 1), Unlock(l), Read(x, 1))
     )
   )
 
@@ -54,7 +53,7 @@ import java.util.concurrent.locks.ReadWriteLock
   val pLocalNoLock = Program(
     Seq(
       Seq(ReadWrite(x, None, r1, None), ReadWrite(r1, None, x, None, _ + 1), Read(x, 1)),
-      Seq(ReadWrite(x, None, r2, None), ReadWrite(r2, None, x, None, _ + 1), Read(x, 1)),
+      Seq(ReadWrite(x, None, r2, None), ReadWrite(r2, None, x, None, _ + 1), Read(x, 1))
     )
   )
 
@@ -62,7 +61,6 @@ import java.util.concurrent.locks.ReadWriteLock
   println(pLocalNoLock)
   println("Expect: Valid")
   println(pLocalNoLock.validUnder(SequentialConsistency))
-
 
   val unlockWithoutLock = Program(
     Seq(
@@ -74,7 +72,6 @@ import java.util.concurrent.locks.ReadWriteLock
   println(unlockWithoutLock)
   println("Expect: Invalid")
   println(unlockWithoutLock.validUnder(SequentialConsistency))
-  
 
 }
 

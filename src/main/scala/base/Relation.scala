@@ -35,7 +35,7 @@ class Relation[A](
     r.addEdges(newEdges: _*)
     r
   }
-  
+
   def relates(n: A, m: A): Boolean = graph.edges.get(n).fold(false)(_.contains(m))
   def reachable(n: A, m: A): Boolean = objects.contains(n) && objects.contains(m) && graph.reachable(n, m)
 

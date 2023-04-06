@@ -90,12 +90,12 @@ class Graph[A](
     require(!hasCycle)
 
     val permaMark = MMap(nodes.map(_ -> false).toSeq: _*)
-    val tempMark = MMap(nodes.map(_ -> false).toSeq : _*)
+    val tempMark = MMap(nodes.map(_ -> false).toSeq: _*)
 
     var sorted = Seq[A]()
 
     // sort n and its children
-    def sort_(n: A): Unit = 
+    def sort_(n: A): Unit =
       if (!permaMark(n)) {
         if (!tempMark(n)) {
           tempMark(n) = true

@@ -1,8 +1,10 @@
 package concsim.program
 
-import scala.collection.mutable.{Map as MMap}
 import concsim.base.Relation
-import escritoire.{Tabulation, Heading}
+import escritoire.Heading
+import escritoire.Tabulation
+
+import scala.collection.mutable.{Map as MMap}
 
 type Order = Relation[Instruction]
 
@@ -41,9 +43,7 @@ sealed trait MemoryModel {
       val linearized = linearizedWithInits.drop(program.variables.size)
 
       val t = Tabulation(
-        program.events.zipWithIndex.map((t, i) => 
-          Heading(s"th$i", getter = ((r: (Instruction, Instruction)) => if (t.exists(_ == r._1)) then r._2.toString() else ""))
-        ): _*
+        program.events.zipWithIndex.map((t, i) => Heading(s"th$i", getter = ((r: (Instruction, Instruction)) => if (t.exists(_ == r._1)) then r._2.toString() else ""))): _*
       ).tabulate(1000, linearized)
 
       val trace = t.reduce(_ ++ "\n" ++ _)
@@ -67,14 +67,14 @@ sealed trait MemoryModel {
   }
 
   /**
-    * Dumb rf generation with minimal pruning ((po U rf)+)
-    *
-    * @param p the program
-    * @param worklist the list of currently unassigned reads
-    * @param currentOrder currently accumulated rf order
-    * @param currentHB currently accumulated hb order (assumed (po U rf)+ by default) 
-    * @return
-    */
+   * Dumb rf generation with minimal pruning ((po U rf)+)
+   *
+   * @param p the program
+   * @param worklist the list of currently unassigned reads
+   * @param currentOrder currently accumulated rf order
+   * @param currentHB currently accumulated hb order (assumed (po U rf)+ by default)
+   * @return
+   */
   def rfWithWorklist(p: Program)(worklist: Seq[ReadInstruction], currentOrder: Order = Relation(), currentHB: Order = po(p)): LazyList[Order] = {
     lazy val rd = worklist.head
     lazy val possibleRFs: Iterable[WriteInstruction] =
@@ -83,10 +83,11 @@ sealed trait MemoryModel {
           case wr: WriteInstruction
               if (
                 wr.vw == rd.vr &&
-                rd.r.isEmpty || wr.w.isEmpty || rd.r.get == wr.w.get &&
-                (!currentHB.reachable(rd, wr)) // is this right in general? Since it assumes (po U rf)+ reachability for selecting rewrites
+                  rd.r.isEmpty || wr.w.isEmpty || rd.r.get == wr.w.get &&
+                  (!currentHB.reachable(rd, wr)) // is this right in general? Since it assumes (po U rf)+ reachability for selecting rewrites
                 // just remove it if it seems wrong, it is technically just pruning; can change to just po reachability by removing currentHB[.withEdges...] below
-              ) => wr
+              ) =>
+            wr
         }
       }
 
@@ -140,15 +141,15 @@ sealed trait MemoryModel {
 case object SequentialConsistency extends MemoryModel {
 
   /**
-    * After all reads and rmws have been assigned sources, check that ambiguously
-    * chosen writes actually compute to the required value.
-    *
-    * @param rford the rf order
-    * @return whether rf is well formed wrt RMW assignments
-    */
+   * After all reads and rmws have been assigned sources, check that ambiguously
+   * chosen writes actually compute to the required value.
+   *
+   * @param rford the rf order
+   * @return whether rf is well formed wrt RMW assignments
+   */
   def validRMWReads(rford: Order): Boolean = {
     if (rford.isAcyclic) {
-      val reads = rford.objects.collect{case r: ReadInstruction => r}
+      val reads = rford.objects.collect { case r: ReadInstruction => r }
       val readVals = MMap[ReadInstruction, Int]()
 
       def getReadVal_(r: ReadInstruction): Option[Int] = {
@@ -157,7 +158,7 @@ case object SequentialConsistency extends MemoryModel {
 
         // pain
         wr match {
-          case w: Write => 
+          case w: Write =>
             if (r.r.isEmpty || r.r.get == w.w.get)
               readVals(r) = w.w.get
               w.w
@@ -194,15 +195,14 @@ case object SequentialConsistency extends MemoryModel {
       def getReadVal(r: ReadInstruction): Option[Int] = if readVals.contains(r) then Some(readVals(r)) else getReadVal_(r)
 
       reads.map(getReadVal).forall(_.isDefined)
-    }
-    else false
+    } else false
   }
 
   /**
-    * Internal function to obtain rf (with partial mo) with some pruning.
-    * Modified version of [[rfWithWorklist]]. See [[rf]] and [[rfWithWorklist]]
-    * for details.
-    */
+   * Internal function to obtain rf (with partial mo) with some pruning.
+   * Modified version of [[rfWithWorklist]]. See [[rf]] and [[rfWithWorklist]]
+   * for details.
+   */
   def moRfWithWorklist(p: Program)(worklist: Seq[ReadInstruction], currentRF: Order = Relation(), currentMO: Order = Relation(), currentHB: Order = po(p)): LazyList[(Order, Order)] = {
     lazy val rd = worklist.head
     lazy val possibleRFsByOrder: Iterable[WriteInstruction] =
@@ -230,7 +230,7 @@ case object SequentialConsistency extends MemoryModel {
 
   /**
    * Performs a (not so) stupid search to assign an rf order to the program.
-   * Also optimized to insert a partial mo into the rf order. 
+   * Also optimized to insert a partial mo into the rf order.
    *
    * Really stupidly checks all possible permutations to find errors. If your
    * behaviour is really invalid, this is quite annoying.
@@ -247,7 +247,7 @@ case object SequentialConsistency extends MemoryModel {
     val reads = p.events.reduce(_ ++ _).collect { case r: ReadInstruction => r }
 
     // TODO: remove take?
-    reads.permutations.take(1).map(moRfWithWorklist(p)(_)).reduce(_ #::: _).collect{case (r, m) if validRMWReads(r) => r U m}
+    reads.permutations.take(1).map(moRfWithWorklist(p)(_)).reduce(_ #::: _).collect { case (r, m) if validRMWReads(r) => r U m }
   }
 
   override def hb(p: Program): LazyList[Order] = rf(p).map(po(p) U _)

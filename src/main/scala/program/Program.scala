@@ -1,6 +1,7 @@
 package concsim.program
 
-import escritoire.{Tabulation, Heading}
+import escritoire.Heading
+import escritoire.Tabulation
 
 class Program(val events: Seq[Seq[Instruction]]) {
 
@@ -16,9 +17,7 @@ class Program(val events: Seq[Seq[Instruction]]) {
     val eventStrings: Seq[Seq[String]] = eventStringsUneven.map(_.padTo(maxLen, ""))
 
     val t = Tabulation(
-      events.zipWithIndex.map((t, i) => 
-        Heading(s"th$i", getter = ((r: Seq[String]) => r(i)))
-      ): _*
+      events.zipWithIndex.map((t, i) => Heading(s"th$i", getter = ((r: Seq[String]) => r(i)))): _*
     ).tabulate(1000, eventStrings.transpose)
 
     "Program\n" ++ t.reduce(_ ++ "\n" ++ _)
