@@ -60,3 +60,47 @@ SequentialConsistency.hb(p3)
 p1.validUnder(SequentialConsistency)
 p2.validUnder(SequentialConsistency)
 p3.validUnder(SequentialConsistency)
+
+
+
+  val q = Program(
+      Seq(
+          Seq(Write(x, 3)),
+          Seq(Write(x, 1), ReadWrite(x, 3, 4)),
+          Seq(Write(x, 2), Read(x, 3))
+      )
+  )
+  q.validUnder(SequentialConsistency)
+
+
+
+  SequentialConsistency.rf(q).toList
+
+  val r1 = Variable("r1") // register for thread 1
+  val r2 = Variable("r2") // register for thread 2
+  val l = Variable("l") // a lock variable
+
+  val pLocalNoLock = Program(
+    Seq(
+      Seq(ReadWrite(x, None, r1, None), ReadWrite(r1, None, x, None, _ + 1), Read(x, 1)),
+      Seq(ReadWrite(x, None, r2, None), ReadWrite(r2, None, x, None, _ + 1), Read(x, 1)),
+    )
+  )
+
+  println(pLocalNoLock)
+  println("Expect: Valid")
+  println(pLocalNoLock.validUnder(SequentialConsistency))
+
+  SequentialConsistency.rf(pLocalNoLock).toList
+
+
+  val pLocal = Program(
+    Seq(
+      Seq(Lock(l), ReadWrite(x, None, r1, None), ReadWrite(r1, None, x, None, _ + 1), Unlock(l), Read(x, 2)),
+      Seq(Lock(l), ReadWrite(x, None, r2, None), ReadWrite(r2, None, x, None, _ + 1), Unlock(l), Read(x, 1)),
+    )
+  )
+
+  println(pLocal)
+  println("Expect: Valid")
+  println(pLocal.validUnder(SequentialConsistency))
