@@ -74,5 +74,3 @@ import scala.collection.parallel._
   println(unlockWithoutLock.validUnder(SequentialConsistency))
 
 }
-
-def msg = "I was compiled by Scala 3. :)"

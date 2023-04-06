@@ -1,8 +1,11 @@
+import pprint.Tree.Lazy
+
 import concsim.program.Program
 
 import concsim.base._
 import scala.collection.mutable.Set
 import scala.collection.parallel._
+import scala.annotation.tailrec
 
 val x2 = Relation[Int](Set(1, 2, 3, 4))
 x2.addEdges((1, 2), (2, 3))
@@ -96,11 +99,28 @@ p3.validUnder(SequentialConsistency)
 
   val pLocal = Program(
     Seq(
-      Seq(Lock(l), ReadWrite(x, None, r1, None), ReadWrite(r1, None, x, None, _ + 1), Unlock(l), Read(x, 2)),
-      Seq(Lock(l), ReadWrite(x, None, r2, None), ReadWrite(r2, None, x, None, _ + 1), Unlock(l), Read(x, 1)),
+      Seq(Lock(l), ReadWrite(x, None, r1, None), ReadWrite(r1, None, x, None, _ + 1), Unlock(l), Read(x, 1)),
+      Seq(Lock(l), ReadWrite(x, None, r2, None), ReadWrite(r2, None, x, None, _ + 1), Unlock(l), Read(x, 2)),
     )
   )
 
-  println(pLocal)
-  println("Expect: Valid")
-  println(pLocal.validUnder(SequentialConsistency))
+  println("Expect: Invalid")
+  pLocal.validUnder(SequentialConsistency) match
+    case v: SequentialConsistency.Valid => v.toString()
+    case _ => "Invalid ..."
+  
+  SequentialConsistency.rf(pLocal).take(1).toList
+
+  val pLocal2 = Program(
+    Seq(
+      Seq(Lock(l), Write(x, 1), Write(x, 2), Unlock(l)),
+      Seq(Lock(l), Read(x, 1), Unlock(l)),
+    )
+  )
+
+  println("Expect: Inalid")
+  pLocal2.validUnder(SequentialConsistency) match
+    case v: SequentialConsistency.Valid => v.toString()
+    case _ => "Invalid ..."
+  
+  SequentialConsistency.rf(pLocal2).toList

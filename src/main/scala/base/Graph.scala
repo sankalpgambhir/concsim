@@ -117,5 +117,5 @@ class Graph[A](
 
   override def toString(): String =
     // pain
-    edges.map { case (k, v) => v.map(x => s"$k -> $x").toSet }.fold(Set.empty)(_ ++ _).toString()
+    edges.map { case (k, v) => v.toSeq.map(x => s"$k -> $x") }.fold(Seq.empty)(_ ++ _).toString()
 }

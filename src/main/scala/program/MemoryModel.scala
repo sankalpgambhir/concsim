@@ -82,6 +82,7 @@ sealed trait MemoryModel {
         i match {
           case wr: WriteInstruction
               if (
+                wr != rd &&
                 wr.vw == rd.vr &&
                   rd.r.isEmpty || wr.w.isEmpty || rd.r.get == wr.w.get &&
                   (!currentHB.reachable(rd, wr)) // is this right in general? Since it assumes (po U rf)+ reachability for selecting rewrites
@@ -162,7 +163,7 @@ case object SequentialConsistency extends MemoryModel {
             if (r.r.isEmpty || r.r.get == w.w.get)
               readVals(r) = w.w.get
               w.w
-            else None
+            else None // shouldn't have been generated if both r and w defined
           case w: ReadWrite =>
             // if it is an RMW
             // if the value is available, match it
@@ -209,23 +210,28 @@ case object SequentialConsistency extends MemoryModel {
       currentHB.objects.collect {
         case wr: (WriteInstruction)
             if (
+              wr != rd &&
               wr.vw == rd.vr &&
-                (!currentHB.reachable(rd, wr)) &&
-                !currentHB.objects.exists {
-                  case wr2: Write => wr.vw == wr2.vw && currentHB.reachable(wr, wr2) && currentHB.reachable(wr2, rd)
-                  case _ => false
-                }
+              (!currentHB.reachable(rd, wr)) &&
+              (!currentHB.objects.exists {
+                case wr2: WriteInstruction => wr.vw == wr2.vw && currentHB.reachable(wr, wr2) && currentHB.reachable(wr2, rd)
+                case _ => false
+              })
             ) =>
           wr
       }
     lazy val possibleRFs = possibleRFsByOrder.filter(wr => rd.r.isEmpty || wr.w.isEmpty || rd.r.get == wr.w.get)
-    def newEdges(wr: Instruction): Seq[(Instruction, Instruction)] = possibleRFsByOrder.filter(currentHB.reachable(_, rd)).filterNot(_ == wr).map(_ -> wr).toSeq
+    // you need to do either before or after for all of them :////
+    // there should be a better way of expressing this with an additional relation
+    // fr = rf^-1; po !!!
+    def newEdgesMO(wr: Instruction): Seq[(Instruction, Instruction)] = Seq.empty
+    def newEdgesHB(wr: Instruction): Seq[(Instruction, Instruction)] = possibleRFsByOrder.filter(currentHB.reachable(wr, _)).filterNot(_ == wr).map(rd -> _).toSeq
 
     if (worklist.isEmpty) (currentRF, currentMO) #:: LazyList.empty
     else if (possibleRFs.isEmpty)
       // invalid branch
       LazyList.empty
-    else possibleRFs.map(wr => moRfWithWorklist(p)(worklist.tail, currentRF.withEdges(wr -> rd), currentMO.withEdges(newEdges(wr): _*), currentHB.withEdges(newEdges(wr): _*))).reduce(_ #::: _)
+    else possibleRFs.map(wr => moRfWithWorklist(p)(worklist.tail, currentRF.withEdges(wr -> rd), currentMO.withEdges(newEdgesMO(wr): _*), currentHB.withEdges(newEdgesHB(wr) :+ (wr -> rd): _*))).reduce(_ #::: _)
   }
 
   /**
@@ -244,10 +250,18 @@ case object SequentialConsistency extends MemoryModel {
    * @return an rf order (U mo)
    */
   override def rf(p: Program): LazyList[Order] = {
-    val reads = p.events.reduce(_ ++ _).collect { case r: ReadInstruction => r }
 
-    // TODO: remove take?
-    reads.permutations.take(1).map(moRfWithWorklist(p)(_)).reduce(_ #::: _).collect { case (r, m) if validRMWReads(r) => r U m }
+    def interleave[A](a: Seq[A], b: Seq[A]): LazyList[Seq[A]] =
+      (a, b) match
+          case (Nil, _) => b #:: LazyList()
+          case (_, Nil) => a #:: LazyList()
+          case (x+:xs, y+:ys) => interleave(xs, b).map(x +: _) #::: interleave(a, ys).map(y +: _)
+      
+    def interleaveL[A](curr: LazyList[Seq[A]], next: Seq[A]): LazyList[Seq[A]] = curr.flatMap(interleave(_, next))
+
+    val reads = p.events.map(_.collect { case r: ReadInstruction => r })
+
+    reads.tail.foldLeft(LazyList(reads.head))(interleaveL).map(moRfWithWorklist(p)(_)).reduce(_ #::: _).collect { case (r, m) if validRMWReads(r) => r U m}
   }
 
   override def hb(p: Program): LazyList[Order] = rf(p).map(po(p) U _)
