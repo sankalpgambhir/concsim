@@ -247,7 +247,7 @@ case object SequentialConsistency extends MemoryModel {
     val reads = p.events.reduce(_ ++ _).collect { case r: ReadInstruction => r }
 
     // TODO: remove take?
-    reads.permutations.map(moRfWithWorklist(p)(_)).reduce(_ #::: _).collect{case (r, m) if validRMWReads(r) => r U m}
+    reads.permutations.take(1).map(moRfWithWorklist(p)(_)).reduce(_ #::: _).collect{case (r, m) if validRMWReads(r) => r U m}
   }
 
   override def hb(p: Program): LazyList[Order] = rf(p).map(po(p) U _)
